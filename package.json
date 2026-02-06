@@ -1,0 +1,22 @@
+{
+  "name": "backend_of-mern_to-do",
+  "version": "1.0.0",
+  "description": "MERN-FULL-Stack_Project",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.1.0",
+    "nodemailer": "^8.0.0",
+    "nodemon": "^3.1.11"
+  }
+}
