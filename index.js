@@ -26,6 +26,11 @@ const transporter = nodeMailer.createTransport({
   },
 });
 
+// Verify transporter on startup so failures are visible immediately
+transporter.verify()
+  .then(() => console.log("Nodemailer transporter is ready"))
+  .catch((err) => console.error("Nodemailer transporter error:", err));
+
 app.post("/add-task", async (req, res) => {
   try {
     const db = await connection();
@@ -113,6 +118,37 @@ app.delete("/delete-task/:id", async (req, res) => {
   }
 });
 
+// Re-added: delete multiple tasks endpoint (expects JSON array of ids in body)
+app.delete("/delete-multiple", async (req, res) => {
+  try {
+    const ids = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).send({
+        success: false,
+        message: "Request body must be a non-empty array of ids",
+      });
+    }
+
+    const objectIds = ids.map((item) => new ObjectId(item));
+    const db = await connection();
+    const collection = await db.collection(collectionName);
+    const result = await collection.deleteMany({ _id: { $in: objectIds } });
+
+    res.send({
+      message: `${result.deletedCount} tasks deleted`,
+      success: true,
+      result: result,
+    });
+  } catch (err) {
+    console.error("Error deleting multiple tasks:", err);
+    res.status(500).send({
+      message: "Internal Server Error",
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
 app.get("/task/:id", async (req, res) => {
   try {
     const id = req.params.id;
@@ -183,57 +219,48 @@ app.post("/signup", async (req, res) => {
   try {
     const userData = req.body;
 
-    if (userData.email && userData.password) {
-      const db = await connection();
-      const collection = await db.collection("users");
-      const result = await collection.insertOne(userData);
-
-      if (result) {
-        jwt.sign(
-          { email: userData.email },
-          "Google",
-          { expiresIn: "5d" },
-          async (err, token) => {
-            if (err) {
-              res.send({
-                message: "Error in token generation",
-                success: false,
-                error: err.message,
-              });
-            } else {
-              const mailOptions = {
-                from: "zainnaveed359@gmail.com",
-                to: userData.email,
-                subject: "Welcome to Our App!",
-                text: `Hello ${userData.name}, welcome to our app! Now you can manage your tasks efficiently. We're glad to have you on board!`,
-              };
-
-              try {
-                const info = await transporter.sendMail(mailOptions);
-                console.log("Email sent successfully:", info.response);
-                res.send({
-                  message: "Signup successful and welcome email sent",
-                  success: true,
-                  token: token,
-                });
-              } catch (error) {
-                console.error("Email sending error:", error);
-                res.send({
-                  message: "Signup successful but email failed",
-                  success: true,
-                  token: token,
-                  emailError: error.message,
-                });
-              }
-            }
-          }
-        )
-      }
-    } else {
-      res.send({
+    if (!userData.email || !userData.password) {
+      return res.status(400).send({
         success: false,
         message: "Email and password are required",
       });
+    }
+
+    const db = await connection();
+    const collection = await db.collection("users");
+    const result = await collection.insertOne(userData);
+
+    if (!result) {
+      return res.status(500).send({
+        success: false,
+        message: "Failed to create user",
+      });
+    }
+
+    // Sign token synchronously
+    let token;
+    try {
+      token = jwt.sign({ email: userData.email }, "Google", { expiresIn: "5d" });
+    } catch (err) {
+      console.error("JWT sign error:", err);
+      return res.status(500).send({ success: false, message: "Token generation failed", error: err.message });
+    }
+
+    const mailOptions = {
+      from: "zainnaveed359@gmail.com",
+      to: userData.email,
+      subject: "Welcome to Our App!",
+      text: `Hello ${userData.name}, welcome to our app! Now you can manage your tasks efficiently. We're glad to have you on board!`,
+    };
+
+    try {
+      await transporter.verify();
+      const info = await transporter.sendMail(mailOptions);
+      console.log("Email sent successfully:", info.response);
+      return res.send({ message: "Signup successful and welcome email sent", success: true, token: token });
+    } catch (error) {
+      console.error("Email sending error:", error);
+      return res.status(200).send({ message: "Signup successful but email failed", success: true, token: token, emailError: error.message });
     }
   } catch (err) {
     console.error("Error in signup:", err);
@@ -249,47 +276,25 @@ app.post("/login", async (req, res) => {
   try {
     const userData = req.body;
 
-    if (req.body.email && req.body.password) {
-      const db = await connection();
-      const collection = await db.collection("users");
+    if (!req.body.email || !req.body.password) {
+      return res.status(400).send({ success: false, message: "Email and password required" });
+    }
 
-      const result = await collection.findOne({
-        email: userData.email,
-        password: userData.password,
-      });
+    const db = await connection();
+    const collection = await db.collection("users");
 
-      if (result) {
-        jwt.sign(
-          { email: userData.email },
-          "Google",
-          { expiresIn: "5d" },
-          (err, token) => {
-            if (err) {
-              res.send({
-                success: false,
-                message: "Error in token generation",
-                error: err.message,
-              });
-            } else if (token) {
-              res.send({
-                success: true,
-                message: "Login successfully",
-                token: token,
-              });
-            }
-          },
-        );
-      } else {
-        res.send({
-          success: false,
-          message: "Invalid email or password",
-        });
-      }
-    } else {
-      res.send({
-        success: false,
-        message: "Email and password required",
-      });
+    const result = await collection.findOne({ email: userData.email, password: userData.password });
+
+    if (!result) {
+      return res.status(401).send({ success: false, message: "Invalid email or password" });
+    }
+
+    try {
+      const token = jwt.sign({ email: userData.email }, "Google", { expiresIn: "5d" });
+      return res.send({ success: true, message: "Login successfully", token: token });
+    } catch (err) {
+      console.error("JWT sign error:", err);
+      return res.status(500).send({ success: false, message: "Token generation failed", error: err.message });
     }
   } catch (err) {
     console.error("Error in login:", err);
@@ -317,4 +322,5 @@ function verifyJWTToken(req, res, next) {
   });
 }
 
-app.listen(3000);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
