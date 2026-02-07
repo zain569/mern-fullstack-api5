@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin:['http://localhost:5173','https://to-do-mern-pro.netlify.app'],
+    origin:['https://to-do-mern-pro.netlify.app'],
     credentials: true,
   }),
 );
@@ -278,3 +278,4 @@ function verifyJWTToken(req, res, next) {
 }
 
 app.listen(3000);
+
