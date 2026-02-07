@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin:['http://localhost:5173','https://to-do-mern-pro.netlify.app'],
+    origin: ["http://localhost:5173", "https://to-do-mern-pro.netlify.app"],
     credentials: true,
   }),
 );
@@ -24,12 +24,13 @@ const transporter = nodeMailer.createTransport({
   secure: false,
   auth: {
     user: "zainnaveed359@gmail.com",
-    pass: "kizrlomlwtjhejqs",  // Must be app password generated from Gmail security settings
+    pass: "essm vzkj ityz bsna", // Must be app password generated from Gmail security settings
   },
 });
 
 // Verify transporter on startup so failures are visible immediately
-transporter.verify()
+transporter
+  .verify()
   .then(() => console.log("Nodemailer transporter is ready"))
   .catch((err) => console.error("Nodemailer transporter error:", err));
 
@@ -230,16 +231,18 @@ app.post("/signup", async (req, res) => {
 
     const db = await connection();
     const collection = await db.collection("users");
-    
-    // Check if email already exists
-    const existingUser = await collection.findOne({ email: userData.email });
+
+    const existingUser = await collection.findOne({
+      email: userData.email,
+    });
+
     if (existingUser) {
       return res.status(409).send({
         success: false,
         message: "Email already registered",
       });
     }
-    
+
     const result = await collection.insertOne(userData);
 
     if (!result) {
@@ -249,35 +252,40 @@ app.post("/signup", async (req, res) => {
       });
     }
 
-    // Sign token synchronously
-    let token;
-    try {
-      token = jwt.sign({ email: userData.email }, "Google", { expiresIn: "5d" });
-    } catch (err) {
-      console.error("JWT sign error:", err);
-      return res.status(500).send({ success: false, message: "Token generation failed", error: err.message });
-    }
+    const token = jwt.sign({ email: userData.email }, "Google", {
+      expiresIn: "5d",
+    });
 
     const mailOptions = {
       from: "zainnaveed359@gmail.com",
       to: userData.email,
       subject: "Welcome to Our App!",
-      text: `Hello ${userData.name}, welcome to our app! Now you can manage your tasks efficiently. We're glad to have you on board!`,
+      text: `Hello ${userData.name}, welcome to our app! Now you can manage your tasks efficiently.`,
     };
 
     try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log("Email sent successfully:", info.response);
-      return res.send({ message: "Signup successful and welcome email sent", success: true, token: token });
-    } catch (error) {
-      console.error("Email sending error:", error);
-      return res.status(500).send({ message: "Signup successful but email failed", success: false, token: token, emailError: error.message });
+      await transporter.sendMail(mailOptions);
+      return res.send({
+        success: true,
+        message: "Signup successful and welcome email sent",
+        token: token,
+      });
+    } catch (emailError) {
+      console.error("Email error:", emailError);
+
+      // ✅ IMPORTANT FIX
+      return res.send({
+        success: true, // <-- signup is STILL successful
+        message: "Signup successful (email failed)",
+        token: token,
+        emailError: emailError.message,
+      });
     }
   } catch (err) {
-    console.error("Error in signup:", err);
+    console.error(err);
     res.status(500).send({
-      message: "Internal Server Error",
       success: false,
+      message: "Internal Server Error",
       error: err.message,
     });
   }
@@ -288,24 +296,43 @@ app.post("/login", async (req, res) => {
     const userData = req.body;
 
     if (!req.body.email || !req.body.password) {
-      return res.status(400).send({ success: false, message: "Email and password required" });
+      return res
+        .status(400)
+        .send({ success: false, message: "Email and password required" });
     }
 
     const db = await connection();
     const collection = await db.collection("users");
 
-    const result = await collection.findOne({ email: userData.email, password: userData.password });
+    const result = await collection.findOne({
+      email: userData.email,
+      password: userData.password,
+    });
 
     if (!result) {
-      return res.status(401).send({ success: false, message: "Invalid email or password" });
+      return res
+        .status(401)
+        .send({ success: false, message: "Invalid email or password" });
     }
 
     try {
-      const token = jwt.sign({ email: userData.email }, "Google", { expiresIn: "5d" });
-      return res.send({ success: true, message: "Login successfully", token: token });
+      const token = jwt.sign({ email: userData.email }, "Google", {
+        expiresIn: "5d",
+      });
+      return res.send({
+        success: true,
+        message: "Login successfully",
+        token: token,
+      });
     } catch (err) {
       console.error("JWT sign error:", err);
-      return res.status(500).send({ success: false, message: "Token generation failed", error: err.message });
+      return res
+        .status(500)
+        .send({
+          success: false,
+          message: "Token generation failed",
+          error: err.message,
+        });
     }
   } catch (err) {
     console.error("Error in login:", err);
