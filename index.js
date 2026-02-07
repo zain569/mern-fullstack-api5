@@ -19,10 +19,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 const transporter = nodeMailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: "zainnaveed359@gmail.com",
-    pass: "kizrlomlwtjhejqs",  // Remove spaces from app password
+    pass: "kizrlomlwtjhejqs",  // Must be app password generated from Gmail security settings
   },
 });
 
@@ -121,11 +123,11 @@ app.delete("/delete-task/:id", async (req, res) => {
 // Re-added: delete multiple tasks endpoint (expects JSON array of ids in body)
 app.delete("/delete-multiple", async (req, res) => {
   try {
-    const ids = req.body;
+    const ids = req.body.ids;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).send({
         success: false,
-        message: "Request body must be a non-empty array of ids",
+        message: "Request body must contain 'ids' as a non-empty array",
       });
     }
 
@@ -228,6 +230,16 @@ app.post("/signup", async (req, res) => {
 
     const db = await connection();
     const collection = await db.collection("users");
+    
+    // Check if email already exists
+    const existingUser = await collection.findOne({ email: userData.email });
+    if (existingUser) {
+      return res.status(409).send({
+        success: false,
+        message: "Email already registered",
+      });
+    }
+    
     const result = await collection.insertOne(userData);
 
     if (!result) {
@@ -254,13 +266,12 @@ app.post("/signup", async (req, res) => {
     };
 
     try {
-      await transporter.verify();
       const info = await transporter.sendMail(mailOptions);
       console.log("Email sent successfully:", info.response);
       return res.send({ message: "Signup successful and welcome email sent", success: true, token: token });
     } catch (error) {
       console.error("Email sending error:", error);
-      return res.status(200).send({ message: "Signup successful but email failed", success: true, token: token, emailError: error.message });
+      return res.status(500).send({ message: "Signup successful but email failed", success: false, token: token, emailError: error.message });
     }
   } catch (err) {
     console.error("Error in signup:", err);
