@@ -19,12 +19,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 const transporter = nodeMailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
+  service: "gmail",
   auth: {
     user: "zainnaveed359@gmail.com",
-    pass: "essm vzkj ityz bsna", // Must be app password generated from Gmail security settings
+    pass: "essmvzkjityzbsna", // Must be app password generated from Gmail security settings
   },
 });
 
