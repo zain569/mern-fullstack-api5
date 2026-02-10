@@ -3,7 +3,6 @@ import { collectionName, connection } from "./dbconfig.js";
 import { ObjectId } from "mongodb";
 import cors from "cors";
 import jwt from "jsonwebtoken";
-import nodeMailer from "nodemailer";
 import cookieParser from "cookie-parser";
 
 const app = express();
@@ -17,20 +16,6 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
-const transporter = nodeMailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: "zainnaveed359@gmail.com",
-    pass: "essmvzkjityzbsna", // Must be app password generated from Gmail security settings
-  },
-});
-
-// Verify transporter on startup so failures are visible immediately
-transporter
-  .verify()
-  .then(() => console.log("Nodemailer transporter is ready"))
-  .catch((err) => console.error("Nodemailer transporter error:", err));
 
 app.post("/add-task", async (req, res) => {
   try {
@@ -254,31 +239,11 @@ app.post("/signup", async (req, res) => {
       expiresIn: "5d",
     });
 
-    const mailOptions = {
-      from: "zainnaveed359@gmail.com",
-      to: userData.email,
-      subject: "Welcome to Our App!",
-      text: `Hello ${userData.name}, welcome to our app! Now you can manage your tasks efficiently.`,
-    };
-
-    try {
-      await transporter.sendMail(mailOptions);
-      return res.send({
-        success: true,
-        message: "Signup successful and welcome email sent",
-        token: token,
-      });
-    } catch (emailError) {
-      console.error("Email error:", emailError);
-
-      // ✅ IMPORTANT FIX
-      return res.send({
-        success: true, // <-- signup is STILL successful
-        message: "Signup successful (email failed)",
-        token: token,
-        emailError: emailError.message,
-      });
-    }
+    return res.send({
+      success: true,
+      message: "User registered successfully",
+      token: token,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).send({
@@ -315,7 +280,7 @@ app.post("/login", async (req, res) => {
 
     try {
       const token = jwt.sign({ email: userData.email }, "Google", {
-        expiresIn: "5d",
+        expiresIn: "1d",
       });
       return res.send({
         success: true,
