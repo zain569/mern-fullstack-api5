@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
+import bcrypt, { compare } from "bcrypt"
 
 const app = express();
 
@@ -203,7 +204,11 @@ app.patch("/update-task/:id", async (req, res) => {
 
 app.post("/signup", async (req, res) => {
   try {
-    const userData = req.body;
+    let userData = req.body;
+    const password = req.body.password;
+    const haskPass = await bcrypt.hash(password, 10);
+
+    userData = {...userData, password: haskPass};
 
     if (!userData.email || !userData.password) {
       return res.status(400).send({
@@ -236,7 +241,7 @@ app.post("/signup", async (req, res) => {
     }
 
     const token = jwt.sign({ email: userData.email }, "Google", {
-      expiresIn: "5d",
+      expiresIn: "1d",
     });
 
     return res.send({
@@ -256,8 +261,6 @@ app.post("/signup", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   try {
-    const userData = req.body;
-
     if (!req.body.email || !req.body.password) {
       return res
         .status(400)
@@ -267,36 +270,39 @@ app.post("/login", async (req, res) => {
     const db = await connection();
     const collection = await db.collection("users");
 
-    const result = await collection.findOne({
-      email: userData.email,
-      password: userData.password,
+    // Find user by email only
+    const user = await collection.findOne({
+      email: req.body.email,
     });
 
-    if (!result) {
+    console.log(user.password);
+    
+
+    if (!user) {
       return res
         .status(401)
         .send({ success: false, message: "Invalid email or password" });
     }
 
-    try {
-      const token = jwt.sign({ email: userData.email }, "Google", {
-        expiresIn: "1d",
-      });
-      return res.send({
-        success: true,
-        message: "Login successfully",
-        token: token,
-      });
-    } catch (err) {
-      console.error("JWT sign error:", err);
+    // Compare plain text password with hashed password using bcrypt
+    const isPasswordValid = await bcrypt.compare(req.body.password, user.password);
+
+    if (!isPasswordValid) {
       return res
-        .status(500)
-        .send({
-          success: false,
-          message: "Token generation failed",
-          error: err.message,
-        });
+        .status(401)
+        .send({ success: false, message: "Invalid email or password" });
     }
+
+    // Password is valid, generate JWT token
+    const token = jwt.sign({ email: user.email }, "Google", {
+      expiresIn: "1d",
+    });
+    
+    return res.send({
+      success: true,
+      message: "Login successfully",
+      token: token,
+    });
   } catch (err) {
     console.error("Error in login:", err);
     res.status(500).send({
